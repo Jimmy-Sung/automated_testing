@@ -1,0 +1,111 @@
+pipeline {
+    agent {
+        kubernetes {
+            defaultContainer 'docker'
+            yaml """
+                 apiVersion: v1
+                 kind: Pod
+                 metadata:
+                   labels:
+                     app: jenkins-slave
+                 spec:
+                   containers:
+                   - name: docker
+                     image: ocaip/docker-with-compose
+                     command:
+                       - cat
+                     tty: true
+                     volumeMounts:
+                       - mountPath: /var/run/docker.sock
+                         name: docker-socket
+                       - mountPath: /opt/robot-data
+                         name: robot-data
+                       - mountPath: /opt/robot-reports
+                         name: robot-reports
+                     resources:
+                       requests:
+                         memory: 4096M
+                       limits:
+                         memory: 8192M
+
+                   volumes:
+                   - name: docker-socket
+                     hostPath:
+                       path: /var/run/docker.sock
+                   - name: robot-data
+                     hostPath:
+                       path: /home/jenkins/robot/robot-data
+                       type: DirectoryOrCreate
+                   - name: robot-reports
+                     hostPath:
+                       path: /home/jenkins/robot/robot-reports
+                       type: DirectoryOrCreate
+                 """
+        }
+    }
+    parameters {
+        string(name: 'THREAD', defaultValue: '9', description: 'Number of parallel job')
+        string(name: 'RUNLEVEL', defaultValue: '1', description: 'Level of testcase execution \n0: -e Stress -e Timeout \n1:fast \n2:Custom args \nother: all')
+        string(name: 'TESTSUITE', defaultValue: '', description: 'Input args like -i <tags> or -e <tags>')
+    }
+    stages {
+        stage('Initialization') {
+            steps {
+                echo '=== Check OS Distribution ==='
+                sh "cat /proc/version"
+                echo '=== Check CPU & RAM Infos ==='
+                sh "cat /proc/cpuinfo"
+                sh "free -m"
+                echo '=== Clean Last Build Files ==='
+                sh "rm -r /opt/robot-data/* /opt/robot-data/.git /opt/robot-reports/* || true"
+                echo '=== Copy Files ==='
+                sh "cp -r ${WORKSPACE}/. /opt/robot-data"
+                echo '=== Check Volume Size ==='
+                sh "du -hs /opt/robot-data /opt/robot-reports"
+            }
+        }
+        stage('Build docker-robot') {
+            steps {
+                echo 'Building Docker Image...'
+                sh "docker build -t docker-robot ."
+            }
+        }
+        stage('Run Main Testing') {
+            steps {
+                script {
+                    echo 'Running Testcases...'
+                    if (params.RUNLEVEL == '0') {
+                        sh "sh run_test_docker.sh -e Stress -e Timeout -m ${params.THREAD} || true"
+                    }
+                    else if (params.RUNLEVEL == '1') {
+                        sh "sh run_test_docker.sh -m ${params.THREAD} -i API -i Login -i Profile -i ResetPWD -i Register -e Register1 -i UploadAOI -e UploadAOI_6 \
+                                                                             -e UploadAOI_8 -i Upload_Team -i Admin -i Statistics -e Statistics_16 -i Page \
+                                                                             -i RWD_1 -i RWD_2 -i RWD_9 -i RWD_10 -i RWD_11 -i Timebar_1 \
+                                                                             -i Timebar_2 -i Function_Verification_7 -i Function_Verification_8 \
+                                                                             -i Function_Verification_9 -i Function_Verification_12 \
+                                                                             -i Function_Verification_13 -i Function_Verification_14 \
+                                                                             -i Function_Verification_16 -i Function_Verification_Not_Login_1 -i Notification \
+                                                                             -i TeamUp -e TeamUp_6 -e TeamUp_7 -e TeamUp_14 -e TeamUp_15 -e TeamUp_16 \
+                                                                             -e TeamUp_17 -e TeamUp_18 -e TeamUp_19 -e TeamUp_21 -i Discussion_1 -i Discussion_2 \
+                                                                             -i Discussion_5 -i Discussion_6 -i Discussion_7 -i Discussion_11 -i ChangeDate -i CLI || true"
+                    }
+                    else if (params.RUNLEVEL == '2') {
+                        sh "sh run_test_docker.sh -m ${params.THREAD} ${params.TESTSUITE} || ture"
+                    }
+                    else {
+                        sh "sh run_test_docker.sh -m ${params.THREAD} || true"
+                    }
+                }
+            }
+        }
+    }
+    post {
+        always {
+            sh "cp -r /opt/robot-reports/* ${WORKSPACE}/Log"
+            script{ currentBuild.displayName = "#${BUILD_NUMBER} ${sh(script: "cat Log/webversion", returnStdout: true)} LV.${params.RUNLEVEL}" }
+            robot outputPath: 'Log/', passThreshold: 100, unstableThreshold: 90.0, disableArchiveOutput : false, otherFiles : '*.png,*.webm,*.gif,*.log'
+            //Deprecated. RobotPublisher will store logfiles
+            //archiveArtifacts artifacts: 'Log/*', fingerprint: true
+        }
+    }
+}

@@ -1,0 +1,49 @@
+*** Variables ***
+${gOCAIP sURL}    ocaip-dev.xaas.tw
+${gOCAIP URL}    https://${gOCAIP sURL}
+${gOCAIP PASSWORD}    h8LvX82g9aA9wM
+${gOCAIP PATH}    MF2drIB5rL8
+${gTest account}    t1
+${gTest first account}    t2
+${gTest normal account}    t3
+${gTest account4}    t4
+${gTest account5}    t5
+${gTest password}    Test5566
+${gTest first password}    Test5566
+${gTest normal password}    Test5566
+${gTest password4}    Test5566
+${gTest password5}    Test5566
+${gTest semiadmin account}    u1    # Do not change u1's password.
+${gTest semiadmin password}    p1    # Do not change u1's password.
+${gTest semiadmin account2}    u2
+${gTest semiadmin password2}    p2
+${gTest semiadmin account3}    u3
+${gTest semiadmin password3}    p3
+${gTest semiadmin account4}    u4
+${gTest semiadmin password4}    p4
+${gTest semiadmin account5}    u5
+${gTest semiadmin password5}    p5
+${gTest admin account}    Admin
+${gTest admin password}    Admin
+${gTest long account}    littleAnt01
+${gTest long password}    A1234567890
+${gTest mail account}    ${gTest protonmail account}
+${gTest gmail account}    ocaip.test@gmail.com
+${gTest gmail account2}    ocaiputest@gmail.com
+${gTest protonmail account}    ocaip.test@protonmail.com
+${gTest register account}    utest
+${gTest mail password}    utest12345678
+${gTest data path}    ${CURDIR}${/}..${/}Test_Data${/}topic_3_4${/}
+${gTest data path AOI}    ${CURDIR}${/}..${/}Test_Data${/}AOI${/}
+${gTest data path hydraulic}    ${CURDIR}${/}..${/}Test_Data${/}hydraulic${/}
+${gTest data path taxi}    ${CURDIR}${/}..${/}Test_Data${/}taxi${/}
+${gTest data path SinglePublic}    ${CURDIR}${/}..${/}Test_Data${/}SinglePublic${/}
+${gTest data path marathon}    ${CURDIR}${/}..${/}Test_Data${/}marathon${/}
+${gTest data path braints}    ${CURDIR}${/}..${/}Test_Data${/}braints${/}
+${gTest data path Exam Image}    ${CURDIR}${/}..${/}Test_Data${/}Exam_image
+${gTest data path Carousel}    ${CURDIR}${/}..${/}Test_Data${/}Carousel
+${gOriginal browser ID}    ${EMPTY}    # The first opened browser ID, will need it if open multiple browsers.
+${gTemp parent folder path}    ${CURDIR}${/}..${/}Temp
+${gDefault download dir}    ${OUTPUT DIR}    # Default download folder for browser.
+${gChromedriver path}    ${/}usr${/}lib${/}chromium-browser
+${gTest server argument}    2    # 1 : local server, 2 : ocaip server

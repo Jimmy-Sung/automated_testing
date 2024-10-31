@@ -1,0 +1,255 @@
+*** Settings ***
+Library           RequestsLibrary
+Library           Collections
+
+*** Variables ***
+${gOCAIP user url}    https://apiadmin:${gOCAIP PASSWORD}@${gOCAIP sURL}/${gOCAIP PATH}/user/api/v1/    # API user service
+${gOCAIP topic url}    https://apiadmin:${gOCAIP PASSWORD}@${gOCAIP sURL}/${gOCAIP PATH}/topic/api/v1/    # OCAIP topic service
+${gOCAIP team url}    https://apiadmin:${gOCAIP PASSWORD}@${gOCAIP sURL}/${gOCAIP PATH}/team/api/v1/    # OCAIP team service
+${gOCAIP notification url}    https://apiadmin:${gOCAIP PASSWORD}@${gOCAIP sURL}/${gOCAIP PATH}/notification/api/v1/    # OCAIP notification service
+${gOCAIP eval url}    https://apiadmin:${gOCAIP PASSWORD}@${gOCAIP sURL}/${gOCAIP PATH}/eval/api/v1/    # OCAIP eval service
+
+*** Keywords ***
+Get All Topics List By API
+    [Documentation]    Request an API to get all topics list.
+    ...
+    ...    *Return value:*
+    ...    - ${Topics list}: a list, each element is a json format (dictionary) information for one topic.
+    ...    - e.g., ${Topic list[0]} is the first topic and it's a json format dictionary.
+    Create Session    OCAIP topic    ${gOCAIP topic url}    disable_warnings=1
+    ${Resp}=    GET Request    OCAIP topic    /topics/list
+    Should Be Equal As Strings    ${Resp.status_code}    200
+    ${Resp json}=    Copy Dictionary    ${Resp.json()}
+    ${Keys}=    Get Dictionary Keys    ${Resp json}    # [message, obj, success]
+    ${If success}=    Get From Dictionary    ${Resp json}    success
+    Should Be True    ${If success}    Returned json content said it's failed, success: ${If success}.
+    ${Topics list}=    Get From Dictionary    ${Resp json}    obj
+    [Return]    ${Topics list}
+
+Get Topic Information By API
+    [Arguments]    ${Topic name}
+    [Documentation]    Get topic information by API with topic name as input.
+    ...    PASS and return a topic information if get such topic, otherwise FAIL.
+    ...
+    ...    *Return value: (if has)*
+    ...    - a json format dictionary which contains the information for this topic name.
+    ${Topics list}=    Get All Topics List By API
+    : FOR    ${Each topic}    IN    @{Topics list}
+    \    Comment    Log List    ${Each topic}
+    \    ${Topic title}=    Get From Dictionary    ${Each topic}    title
+    \    Comment    Log    ${Topic title}
+    \    Return From Keyword If    "${Topic title}" == "${Topic name}"    ${Each topic}    # Return dictionary of wantted topic information.
+    FAIL    Cannot find the topic "${Topic name}" you want.
+    [Teardown]    Delete All Sessions
+
+Get Topic Id By API
+    [Arguments]    ${Topic name}
+    [Documentation]    Get topic ID by API with topic name as input for other API's further usage.
+    ...
+    ...    *Return value:*
+    ...    - an ID of this topic.
+    ${Topic info}=    Get Topic Information By API    ${Topic name}
+    ${Topic id}=    Get From Dictionary    ${Topic info}    topic_id
+    [Return]    ${Topic id}
+
+Get All Users List By API
+    [Documentation]    Request an API to get all users list.
+    ...
+    ...    *Return value:*
+    ...    - ${Users list}: a list, each element is a json format (dictionary) information for one user.
+    ...    - e.g., ${Users list[0]} is the first user and it's a json format dictionary.
+    Create Session    OCAIP user    ${gOCAIP user url}    disable_warnings=1
+    ${Resp}=    GET Request    OCAIP user    /users
+    Comment    Should Be Equal As Strings    ${Resp.status_code}    200
+    ${Resp json}=    Copy Dictionary    ${Resp.json()}
+    ${Keys}=    Get Dictionary Keys    ${Resp json}    # [message, obj, success]
+    ${If success}=    Get From Dictionary    ${Resp json}    success
+    Should Be True    ${If success}    Returned json content said it's failed, success: ${If success}.
+    ${Users list}=    Get From Dictionary    ${Resp json}    obj
+    [Teardown]    Delete All Sessions
+    [Return]    ${Users list}
+
+Get User Information By API
+    [Arguments]    ${User name}
+    [Documentation]    Request an API to get specific user information.
+    ...
+    ...    *Return value:*
+    ...    - ${Users info}: a json format dictionary which contains information of this user.
+    Create Session    OCAIP users    ${gOCAIP user url}    disable_warnings=1
+    ${Resp}=    GET Request    OCAIP users    /users/${User name}
+    Comment    Should Be Equal As Strings    ${Resp.status_code}    200
+    ${Resp json}=    Copy Dictionary    ${Resp.json()}
+    ${Keys}=    Get Dictionary Keys    ${Resp json}    # [message, obj, success]
+    ${If success}=    Get From Dictionary    ${Resp json}    success
+    Should Be True    ${If success}    Returned json content said it's failed, success: ${If success}.
+    ${User info dict}=    Get From Dictionary    ${Resp json}    obj
+    [Teardown]    Delete All Sessions
+    [Return]    ${User info dict}
+
+Check If User Email Exists In System By API
+    [Arguments]    ${Email address}
+    [Documentation]    Request an API to check if such email address exists in the system.
+    ...
+    ...    PASS if email exists, otherwise failed.
+    Create Session    OCAIP users    ${gOCAIP user url}    disable_warnings=1
+    ${Resp}=    GET Request    OCAIP users    /users/email/${Email address}
+    Comment    Should Be Equal As Strings    ${Resp.status_code}    200
+    ${Resp json}=    Copy Dictionary    ${Resp.json()}
+    ${Keys}=    Get Dictionary Keys    ${Resp json}    # [message, obj, success]
+    # If email exists, result will be false.
+    Comment    ${If success}=    Get From Dictionary    ${Resp json}    success
+    Comment    Should Not Be True    ${If success}    Returned json content said it's success, the email ${Email address} may not exist in system.    # If failed usually stopped here.
+    ${Message}=    Get From Dictionary    ${Resp json}    message
+    Should Contain    ${Message}    <${Email address}> exists    Email should already exist but message said: "${Message}".    values=False
+    [Teardown]    Delete All Sessions
+
+Get All Teams Information From Topic By API
+    [Arguments]    ${Topic name}
+    [Documentation]    Request an API to get all teams information in list for a specific topic.
+    ...
+    ...    *Return value:*
+    ...    - ${Topics list}: a list, each element is a json format (dictionary) information for one team.
+    ...    - e.g., ${Topic list[0]} is the first team of the topic and it's a json format dictionary.
+    ${Topic id}=    Get Topic Id By API    ${Topic name}
+    Create Session    OCAIP team    ${gOCAIP team url}    disable_warnings=1
+    ${Resp}=    GET Request    OCAIP team    /topic_team/${Topic id}
+    Comment    Should Be Equal As Strings    ${Resp.status_code}    200
+    ${Resp json}=    Copy Dictionary    ${Resp.json()}
+    ${Keys}=    Get Dictionary Keys    ${Resp json}    # [message, obj, success]
+    ${If success}=    Get From Dictionary    ${Resp json}    success
+    Should Be True    ${If success}    Returned json content said it's failed, success: ${If success}.
+    ${Teams info list}=    Get From Dictionary    ${Resp json}    obj
+    [Teardown]    Delete All Sessions
+    [Return]    ${Teams info list}
+
+Check If User Attends a Topic By API
+    [Arguments]    ${Topic name}    ${User name}
+    [Documentation]    Request an API to check if user attends a specific topic.
+    ...
+    ...    PASS if user is the attendee of the topic, otherwise failed.
+    ${Topic id}=    Get Topic Id By API    ${Topic name}
+    Create Session    OCAIP team    ${gOCAIP team url}    disable_warnings=1
+    ${Resp}=    GET Request    OCAIP team    /topic_team/${Topic id}/attendee/${User name}
+    Comment    Should Be Equal As Strings    ${Resp.status_code}    200
+    ${Resp json}=    Copy Dictionary    ${Resp.json()}
+    ${Keys}=    Get Dictionary Keys    ${Resp json}    # [message, obj, success]
+    Comment    ${If success}=    Get From Dictionary    ${Resp json}    success
+    Comment    Should Be True    ${If success}    Returned json content said it's failed, success: ${If success}, user ${User name} may not attend the topic.    # If failed usually stopped here.
+    ${Message}    Get From Dictionary    ${Resp json}    message
+    Should Contain    ${Message}    user is attendee in topic    User is not attend the topic: "${Message}".    values=False
+    [Teardown]    Delete All Sessions
+
+Get Remaining Time Of Topic By API
+    [Arguments]    ${Topic name}
+    [Documentation]    Request an API to get remaining time of the topic.
+    ...
+    ...    *Return value:*
+    ...    - ${Remaining time}: remaining time (in second) of this topic.
+    ${Topic id}=    Get Topic Id By API    ${Topic name}
+    Create Session    OCAIP topic    ${gOCAIP topic url}    disable_warnings=1
+    ${Resp}=    GET Request    OCAIP topic    /topics/remaining_time/${Topic id}
+    Comment    Should Be Equal As Strings    ${Resp.status_code}    200
+    ${Resp json}=    Copy Dictionary    ${Resp.json()}
+    ${Keys}=    Get Dictionary Keys    ${Resp json}    # [message, obj, success]
+    ${If success}=    Get From Dictionary    ${Resp json}    success
+    Should Be True    ${If success}    Returned json content said it's failed, success: ${If success}.
+    ${Remaining time info}=    Get From Dictionary    ${Resp json}    obj
+    ${Get topic id}=    Get From Dictionary    ${Remaining time info}    topic_id
+    Should Be Equal As Strings    ${Topic id}    ${Get topic id}    Error: request topic id is not what we want, request ${Topic id} but get ${Get topic id}
+    ${Remaining time}    Get From Dictionary    ${Remaining time info}    remaining_time
+    [Teardown]    Delete All Sessions
+    [Return]    ${Remaining time}
+
+Get Team Information From Topic By API
+    [Arguments]    ${Topic name}    ${Team name}
+    [Documentation]    Request an API to get a team information from topic.
+    ...
+    ...    *Return value:*
+    ...    - ${Team info dict}: a json format dictionary which contains required team information of the topic.
+    ${Topic id}=    Get Topic Id By API    ${Topic name}
+    Create Session    OCAIP team    ${gOCAIP team url}    disable_warnings=1
+    ${Resp}=    GET Request    OCAIP team    /topic_team/info/${Topic id}/${Team name}
+    Comment    Should Be Equal As Strings    ${Resp.status_code}    200
+    ${Resp json}=    Copy Dictionary    ${Resp.json()}
+    ${Keys}=    Get Dictionary Keys    ${Resp json}    # [message, obj, success]
+    ${If success}=    Get From Dictionary    ${Resp json}    success
+    Should Be True    ${If success}    Returned json content said it's failed, success: ${If success}.
+    ${Team list}=    Get From Dictionary    ${Resp json}    obj    # It's a list contain only one element. (a team info)
+    ${Team info dict}=    Set Variable    ${Team list[0]}
+    ${Get topic id}=    Get From Dictionary    ${Team info dict}    topic_id
+    Should Be Equal As Strings    ${Topic id}    ${Get topic id}    Error: request topic id is not what we want, request ${Topic id} but get ${Get topic id}
+    [Teardown]    Delete All Sessions
+    [Return]    ${Team info dict}
+
+Get Notification Messages Of A User By API
+    [Arguments]    ${User name}
+    [Documentation]    Request an API to get all notification message of a user.
+    ...
+    ...    *Return value:*
+    ...    - ${Notificaiton msgs list}: a list which contains all notification messages of this user. (each element in list is a json format dictionary indicating a notificaiton message)
+    Create Session    OCAIP notification    ${gOCAIP notification url}    disable_warnings=1
+    ${Resp}=    GET Request    OCAIP notification    /notification/messages/${User name}
+    Comment    Should Be Equal As Strings    ${Resp.status_code}    200
+    ${Resp json}=    Copy Dictionary    ${Resp.json()}
+    ${Keys}=    Get Dictionary Keys    ${Resp json}    # [message, obj, success]
+    ${If success}=    Get From Dictionary    ${Resp json}    success
+    Should Be True    ${If success}    Returned json content said it's failed, success: ${If success}.
+    ${Notificaiton msgs list}=    Get From Dictionary    ${Resp json}    obj
+    [Teardown]    Delete All Sessions
+    [Return]    ${Notificaiton msgs list}
+
+Get Join Condition For A Topic By API
+    [Arguments]    ${Topic name}
+    [Documentation]    Request an API to get join condition while signing NDA for a topic.
+    ...
+    ...    *Return value:*
+    ...    - ${Join condition list}: a lsit of string contains join condition while signing NDA for a topic.
+    ${Topic id}=    Get Topic Id By API    ${Topic name}
+    Create Session    OCAIP topic    ${gOCAIP topic url}    disable_warnings=1
+    ${Resp}=    GET Request    OCAIP topic    /topics/join_condition/${Topic id}
+    Comment    Should Be Equal As Strings    ${Resp.status_code}    200
+    ${Resp json}=    Copy Dictionary    ${Resp.json()}
+    ${Keys}=    Get Dictionary Keys    ${Resp json}    # [message, obj, success]
+    ${If success}=    Get From Dictionary    ${Resp json}    success
+    Should Be True    ${If success}    Returned json content said it's failed, success: ${If success}.
+    ${Content json}=    Get From Dictionary    ${Resp json}    obj
+    ${Get topic id}=    Get From Dictionary    ${Content json}    topic_id
+    Should Be Equal As Strings    ${Topic id}    ${Get topic id}    Error: request topic id is not what we want, request ${Topic id} but get ${Get topic id}
+    ${Join condition list}=    Get From Dictionary    ${Content json}    join_condition
+    [Teardown]    Delete All Sessions
+    [Return]    ${Join condition list}
+
+Check If Team Can Be Invited Into Topic By API
+    [Arguments]    ${Topic name}    ${Inviter}    ${Invitee}
+    [Documentation]    Check if an invitee can be inviteed by inviter into this topic by API.
+    ...
+    ...    PASS if This team can be invited, otherwise failed.
+    ${Topic id}=    Get Topic Id By API    ${Topic name}
+    Create Session    OCAIP team    ${gOCAIP team url}    disable_warnings=1
+    ${Resp}=    GET Request    OCAIP team    /team/request_exist/${Topic id}/${Inviter}/${Invitee}
+    Should Be Equal As Strings    ${Resp.status_code}    200
+    ${Resp json}=    Copy Dictionary    ${Resp.json()}
+    ${Keys}=    Get Dictionary Keys    ${Resp json}    # [message, obj, success]
+    Comment    ${If success}=    Get From Dictionary    ${Resp json}    success
+    Comment    Should Be True    ${If success}    Returned json content said it's failed, success: ${If success}.
+    ${Message}    Get From Dictionary    ${Resp json}    message
+    Should Contain    ${Message}    This team can be invited.    ${Invitee} cannot be invited by ${Inviter} into topic ${Topic name}: "${Message}".    values=False
+    [Teardown]    Delete All Sessions
+
+Change Eval Stage By API
+    [Arguments]    ${Topic id}    ${Stage}
+    [Documentation]    change eval stage for NTU_News issue, recalculate scores, and rerank  by API.
+    Create Session    OCAIP topic    ${gOCAIP topic url}    disable_warnings=1
+    ${header}=    Create Dictionary    Content-Type=application/json
+    ${data}=    Create Dictionary    change_to_index=${${Stage}}
+    ${Resp}=    POST Request    OCAIP topic    /topics/update_pripub_bucket/${Topic id}    headers=${header}    data=${data}
+    Should Be Equal As Strings    ${Resp.status_code}    200
+    Create Session    OCAIP eval    ${gOCAIP eval url}    disable_warnings=1
+    ${header}=    Create Dictionary    Content-Type=application/json
+    ${data}=    Create Dictionary    topic_id=${Topic id}
+    ${Resp}=    POST Request    OCAIP eval    /eval/recalculate_score    headers=${header}    data=${data}
+    Should Be Equal As Strings    ${Resp.status_code}    200
+    Create Session    OCAIP eval    ${gOCAIP eval url}    disable_warnings=1
+    ${Resp}=    GET Request    OCAIP eval    /eval/check_topic_end/${Topic id}
+    Should Be Equal As Strings    ${Resp.status_code}    200
+    [Teardown]    Delete All Sessions

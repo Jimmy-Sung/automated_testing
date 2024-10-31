@@ -1,0 +1,73 @@
+*** Settings ***
+Library           OperatingSystem
+Library           Collections
+Library           String
+Library           Process
+Resource          ../Variables/OCAIP_Variables.txt
+
+*** Keywords ***
+Update Chromedriver
+    [Documentation]    Update current web driver for this machine.
+    ...    - For Windows, will put new WebDirver to location of python.exe.
+    ...    - For Linux, will put into local path in case there's permission issue of other path.
+    # Check if OS is Windows or Linux
+    ${System}=    Evaluate    platform.system()    platform
+    Log    This is ${System}
+    ${Windows python path}=    Run Keyword If    "${System}" == "Windows"    Run    where python3
+    ...    ELSE    Run    which python3
+    @{Windows python paths}=    Split String    ${Windows python path}
+    ${Windows python path}=    Set Variable    @{Windows python paths}[0]
+    ${Windows python path}    ${Exe file}=    Split Path    ${Windows python path}
+    ${Chromedriver path}=    Set Variable If    "${System}" == "Windows"    ${Windows python path}    "${System}" == "Linux"    ${gChromedriver path}    # First set default path for chromedriver, will be changed later if needed.
+    # First check if outside network is available
+    ${Ping command}=    Set Variable If    "${System}" == "Windows"    ping 8.8.8.8 -n 1    "${System}" == "Linux"    ping 8.8.8.8 -c 1
+    ${Return code}    ${Output}=    Run and Return RC And Output    ${Ping command}
+    Log    ${Return code}
+    Return From Keyword If    '${Return code}' != '0'
+    # Get latest version number
+    ${Wget command}=    Set Variable If    "${System}" == "Windows"    ${CURDIR}${/}..${/}Tool${/}wget.exe    "${System}" == "Linux"    wget
+    ${Wget output}=    Run Process    ${Wget command}    -qO-    https://chromedriver.storage.googleapis.com/LATEST_RELEASE
+    ${Latest driver version}=    Set Variable    ${Wget output.stdout}
+    # Get current system driver version
+    ## Using ignore error to prevent command error.
+    ${Status}    ${Current driver version}=    Run Keyword And Ignore Error    Run Process    chromedriver    --version    stderr=STDOUT
+    ...    timeout=2 sec    on_timeout=terminate
+    ${Current driver version}=    Set Variable If    "${Status}" == "PASS"    ${Current driver version.stdout}
+    # If driver is up-to-date, no need to re-download it.
+    ${Status}    ${Message}=    Run Keyword And Ignore Error    Should Contain    ${Current driver version}    ${Latest driver version}
+    Return From Keyword If    "${Status}" == "PASS"
+    Log To Console    Latest chromedriver version ${Latest driver version}
+    Return From Keyword If    "${System}" == "Linux"
+    # Download latest driver
+    ${Zip file name}=    Set Variable If    "${System}" == "Windows"    chromedriver_win32.zip    "${System}" == "Linux"    chromedriver_linux64.zip
+    ${Zip command}=    Set Variable If    "${System}" == "Windows"    ${CURDIR}${/}..${/}Tool${/}7za.exe    "${System}" == "Linux"    unzip
+    ${Windows unzip options}=    Create List    e    ${gTemp folder path}${/}${Zip file name}    -o${gTemp folder path}
+    ${Linux unzip options}=    Create List    -o    ${gTemp folder path}${/}${Zip file name}    -d    ${TEMPDIR}
+    ${Unzip options}=    Set Variable If    "${System}" == "Windows"    ${Windows unzip options}    "${System}" == "Linux"    ${Linux unzip options}
+    ${Wget output}=    Run Process    ${Wget command}    --no-check-certificate    --progress\=bar:force:noscroll    -O    ${gTemp folder path}${/}${Zip file name}
+    ...    https://chromedriver.storage.googleapis.com/${Latest driver version}/${Zip file name}    stderr=STDOUT    timeout=10 sec    on_timeout=terminate
+    File Should Exist    ${gTemp folder path}${/}${Zip file name}
+    Log To Console    Download chromedriver version ${Latest driver version} completed
+    ${Unzip output}=    Run Process    ${Zip command}    @{Unzip options}    stderr=STDOUT    timeout=3 sec    on_timeout=terminate
+    Log    ${Unzip output.stdout}
+    Run Keyword If    "${System}" == "Windows"    Should Contain    ${Unzip output.stdout}    Everything is Ok
+    ...    ELSE IF    "${System}" == "Linux"    Should Be Equal As Integers    ${Unzip output.rc}    0
+    Run Keyword If    "${System}" == "Windows"    Move File    ${gTemp folder path}${/}chromedriver.exe    ${Windows python path}
+    # Verify
+    ## Since we might have no permission to put driver to $PATH on Linux system, stay the driver in local path and specify the driver path.
+    ${Chromedriver path}=    Set Variable If    "${System}" == "Windows"    ${Windows python path}    "${System}" == "Linux"    ${TEMPDIR}
+    # Absolute path on Jenkins or will [Errno 13] Permission denied
+    ${Current driver version}=    Run Process    ${Chromedriver path}${/}chromedriver    --version    stderr=STDOUT
+    Log    ${Current driver version.stdout}
+    Run Keyword If    "${System}" == "Linux"    Set Environment Variable    PATH    ${Chromedriver path}:%{PATH}    # If Linux system, we add local chromedriver dir to PATH.
+    ${Current driver version}=    Run Process    chromedriver    --version    stderr=STDOUT    # Check chromedriver version which with default path.
+    ${Current driver version}=    Set Variable    ${Current driver version.stdout}
+    Should Contain    ${Current driver version}    ${Latest driver version}
+    Set Suite Variable    ${gChromedriver path}    ${Chromedriver path}
+    [Teardown]    # All temp folder files will be removed in suite teardown since some might be used during testing.
+
+Check if file downloaded is done
+    [Arguments]    ${File name}
+    [Documentation]    Downloaded file will save at default download folder, this keyword will check if there's such file name at default download folder.
+    # Then Check completed file existed in the folder.
+    Wait Until Keyword Succeeds    3 mins    3 secs    File Should Exist    ${gDefault download dir}${/}${File name}

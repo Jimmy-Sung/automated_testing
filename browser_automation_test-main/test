@@ -1,0 +1,58 @@
+*** Settings ***
+Library    SeleniumLibrary
+
+*** Variables ***
+${URL}    http://v5lungct2.v5.com.tw/M1/login
+${BROWSER}    Chrome
+${TIMEOUT}    20s  # 設置一個全局超時時間
+${LOGIN_XPATH} xpath = /html/body/div/form/div[3]/div/div/span/button
+
+*** Test Cases ***
+Open PCHome Taiwan And click 3C
+    [Documentation]    打開 PCHome 
+    Open Browser    ${URL}    ${BROWSER}
+    Maximize Browser Window
+    Wait Until Element Is Visible  ${login}  ${TIMEOUT}
+    Input Text id:name  Jimmy
+    Wait Until Element Is Visible  ${login}  ${TIMEOUT}
+    Input Text id:password  XXX
+    Sleep    2s
+    Click Element  ${login}
+    Sleep    9s
+    Close Browser
+
+
+
+*** Settings ***
+Library    SeleniumLibrary
+
+*** Variables ***
+${URL}           http://v5lungct2.v5.com.tw/M1/login
+${BROWSER}       Chrome
+${TIMEOUT}       20s
+${LOGIN_XPATH}   xpath=/html/body/div/form/div[3]/div/div/span/button
+${USERNAME}      Jimmy
+${PASSWORD}      Jimmy
+${INPUT_XPATH}   xpath=/html/body/div/div/section/section/section/main/div/div[1]/input
+${ERROR_XPATH}   xpath=//*[@id="error-code"]
+${DETAILS_XPATH} xpath=//*[@id="details-button"]
+${MIXWORD}       1231234照片
+${SUCCESS_XPATH} xpath=//p[@class='ant-empty-description']
+
+*** Test Cases ***
+Open V5med
+    [Documentation]    打開 V5med 並輸入帳密點擊 登入
+    Open Browser    ${URL}    ${BROWSER}
+    Maximize Browser Window
+    Wait Until Element Is Visible    ${LOGIN_XPATH}    ${TIMEOUT}
+    Input Text    id:name    ${USERNAME}
+    Input Text    id:password    ${PASSWORD}
+    Click Element    ${LOGIN_XPATH}
+    Wait Until Element Is Visible    ${INPUT_XPATH}    ${TIMEOUT}
+    # 在指定的输入框中输入文本
+    Input Text    ${INPUT_XPATH}    ${MIXWORD}
+    sleep   1s
+    Focus    ${INPUT_XPATH}
+    sleep   1s
+    Clear Element Text    ${INPUT_XPATH}
+    sleep 1s
